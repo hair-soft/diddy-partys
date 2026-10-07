@@ -1,0 +1,119 @@
+// ============================================================
+// PARTY APP CONFIG
+// 1. Set your Supabase URL and anon key below.
+// 2. Create a public "photos" bucket in Supabase Storage.
+// 3. The app uploads photos into that bucket and displays them.
+// ============================================================
+const SUPABASE_URL = "DEINE_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "DEIN_SUPABASE_ANON_KEY";
+
+const hasSupabase = !SUPABASE_URL.includes("DEINE_") && !SUPABASE_ANON_KEY.includes("DEIN_");
+const sb = hasSupabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+const fileInput = document.getElementById("fileInput");
+const gallery = document.getElementById("gallery");
+const uploadBtn = document.getElementById("uploadBtn");
+const uploadStatus = document.getElementById("uploadStatus");
+const emptyState = document.getElementById("emptyState");
+const qrCanvas = document.getElementById("qr");
+
+function showStatus(msg, error=false) {
+  uploadStatus.textContent = msg;
+  uploadStatus.classList.toggle("error", error);
+}
+
+async function uploadPhotos(files) {
+  if (!files.length) return;
+  if (!sb) {
+    showStatus("Supabase ist noch nicht eingerichtet. Trage URL und Anon-Key in app.js ein.", true);
+    return;
+  }
+
+  uploadBtn.disabled = true;
+  showStatus("Fotos werden hochgeladen …");
+
+  let success = 0;
+  for (const file of files) {
+    if (!file.type.startsWith("image/")) continue;
+    if (file.size > 15 * 1024 * 1024) continue;
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+
+    const { error } = await sb.storage.from("photos").upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type
+    });
+
+    if (!error) success++;
+  }
+
+  showStatus(`${success} Foto${success === 1 ? "" : "s"} erfolgreich hochgeladen!`);
+  uploadBtn.disabled = false;
+  fileInput.value = "";
+  await loadGallery();
+}
+
+async function loadGallery() {
+  if (!sb) {
+    emptyState.style.display = "block";
+    emptyState.innerHTML = "📸 <strong>Fotogalerie bereit</strong><br>Verbinde Supabase, damit hier die Partyfotos erscheinen.";
+    return;
+  }
+
+  const { data, error } = await sb.storage.from("photos").list("", {
+    limit: 200,
+    sortBy: { column: "created_at", order: "desc" }
+  });
+
+  if (error) {
+    emptyState.style.display = "block";
+    emptyState.textContent = "Die Galerie konnte gerade nicht geladen werden.";
+    return;
+  }
+
+  gallery.innerHTML = "";
+  if (!data.length) {
+    emptyState.style.display = "block";
+    emptyState.innerHTML = "📸 <strong>Noch keine Fotos</strong><br>Sei der Erste und lade ein Foto hoch!";
+    return;
+  }
+
+  emptyState.style.display = "none";
+
+  data.forEach(item => {
+    const { data: urlData } = sb.storage.from("photos").getPublicUrl(item.name);
+    const card = document.createElement("button");
+    card.className = "photo-card";
+    card.type = "button";
+    card.innerHTML = `<img loading="lazy" src="${urlData.publicUrl}" alt="Partyfoto">`;
+    card.onclick = () => openLightbox(urlData.publicUrl);
+    gallery.appendChild(card);
+  });
+}
+
+function openLightbox(url) {
+  const box = document.createElement("div");
+  box.className = "lightbox";
+  box.innerHTML = `<div class="lightbox-bg"></div><img src="${url}" alt="Partyfoto"><button class="close-lightbox">×</button>`;
+  document.body.appendChild(box);
+  box.querySelector(".close-lightbox").onclick = () => box.remove();
+  box.querySelector(".lightbox-bg").onclick = () => box.remove();
+}
+
+function createQR() {
+  if (typeof QRCode === "undefined") return;
+  const url = window.location.href;
+  QRCode.toCanvas(qrCanvas, url, {
+    width: 220,
+    margin: 2,
+    color: { dark: document.body.dataset.theme === "halloween" ? "#ff7a00" : "#111827", light: "#ffffff" }
+  });
+}
+
+uploadBtn.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => uploadPhotos([...fileInput.files]));
+
+createQR();
+loadGallery();
