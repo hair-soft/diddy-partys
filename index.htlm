@@ -1,119 +1,122 @@
-// ============================================================
-// PARTY APP CONFIG
-// 1. Set your Supabase URL and anon key below.
-// 2. Create a public "photos" bucket in Supabase Storage.
-// 3. The app uploads photos into that bucket and displays them.
-// ============================================================
-const SUPABASE_URL = "DEINE_SUPABASE_URL";
-const SUPABASE_ANON_KEY = "DEIN_SUPABASE_ANON_KEY";
 
-const hasSupabase = !SUPABASE_URL.includes("DEINE_") && !SUPABASE_ANON_KEY.includes("DEIN_");
-const sb = hasSupabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080c18">
+  <title>HOUSE23 | Hausparty</title>
 
-const fileInput = document.getElementById("fileInput");
-const gallery = document.getElementById("gallery");
-const uploadBtn = document.getElementById("uploadBtn");
-const uploadStatus = document.getElementById("uploadStatus");
-const emptyState = document.getElementById("emptyState");
-const qrCanvas = document.getElementById("qr");
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-function showStatus(msg, error=false) {
-  uploadStatus.textContent = msg;
-  uploadStatus.classList.toggle("error", error);
-}
+  <link rel="stylesheet" href="style.css">
 
-async function uploadPhotos(files) {
-  if (!files.length) return;
-  if (!sb) {
-    showStatus("Supabase ist noch nicht eingerichtet. Trage URL und Anon-Key in app.js ein.", true);
-    return;
-  }
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
 
-  uploadBtn.disabled = true;
-  showStatus("Fotos werden hochgeladen …");
+<body>
+  <header class="topbar">
+    <a class="logo" href="#">HOUSE<span>23</span></a>
+    <span class="date-pill">23. OKTOBER 2026</span>
+  </header>
 
-  let success = 0;
-  for (const file of files) {
-    if (!file.type.startsWith("image/")) continue;
-    if (file.size > 15 * 1024 * 1024) continue;
+  <main>
+    <section class="hero">
+      <div class="eyebrow"><span class="pulse"></span> PRIVATE HOUSE PARTY</div>
 
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+      <h1>LET'S<br><span>PARTY.</span></h1>
+      <p class="hero-description">
+        Gute Leute. Gute Musik. Erinnerungen für immer.
+      </p>
 
-    const { error } = await sb.storage.from("photos").upload(path, file, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType: file.type
-    });
+      <div class="countdown" id="countdown">
+        <div><strong id="days">00</strong><small>TAGE</small></div>
+        <div><strong id="hours">00</strong><small>STUNDEN</small></div>
+        <div><strong id="minutes">00</strong><small>MINUTEN</small></div>
+        <div><strong id="seconds">00</strong><small>SEKUNDEN</small></div>
+      </div>
 
-    if (!error) success++;
-  }
+      <a href="#fotos" class="hero-button">PARTY FOTOS <span>↘</span></a>
+    </section>
 
-  showStatus(`${success} Foto${success === 1 ? "" : "s"} erfolgreich hochgeladen!`);
-  uploadBtn.disabled = false;
-  fileInput.value = "";
-  await loadGallery();
-}
+    <section class="section" id="fotos">
+      <div class="section-label">01 / SHARE THE MOMENTS</div>
+      <h2>Dein Abend.<br><span>Unsere Erinnerungen.</span></h2>
+      <p class="section-description">
+        Mach Fotos, lade sie hoch und teile deine Momente mit allen.
+        Ohne Registrierung.
+      </p>
 
-async function loadGallery() {
-  if (!sb) {
-    emptyState.style.display = "block";
-    emptyState.innerHTML = "📸 <strong>Fotogalerie bereit</strong><br>Verbinde Supabase, damit hier die Partyfotos erscheinen.";
-    return;
-  }
+      <div class="upload-grid">
+        <div class="panel upload-panel">
+          <div class="big-icon">📸</div>
+          <h3>Teile deine Fotos</h3>
+          <p>Wähle ein oder mehrere Bilder von deinem Handy aus.</p>
 
-  const { data, error } = await sb.storage.from("photos").list("", {
-    limit: 200,
-    sortBy: { column: "created_at", order: "desc" }
-  });
+          <input
+            id="fileInput"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic"
+            multiple
+            hidden
+          >
 
-  if (error) {
-    emptyState.style.display = "block";
-    emptyState.textContent = "Die Galerie konnte gerade nicht geladen werden.";
-    return;
-  }
+          <button id="uploadBtn" class="primary-button">
+            FOTOS AUSWÄHLEN <span>↗</span>
+          </button>
 
-  gallery.innerHTML = "";
-  if (!data.length) {
-    emptyState.style.display = "block";
-    emptyState.innerHTML = "📸 <strong>Noch keine Fotos</strong><br>Sei der Erste und lade ein Foto hoch!";
-    return;
-  }
+          <div id="uploadStatus" class="status" role="status" aria-live="polite"></div>
+          <div class="privacy-note">
+            Bitte lade nur Fotos hoch, deren Veröffentlichung für die abgebildeten Personen in Ordnung ist.
+          </div>
+        </div>
 
-  emptyState.style.display = "none";
+        <div class="panel qr-panel">
+          <div class="qr-frame">
+            <canvas id="qr"></canvas>
+          </div>
+          <h3>SCAN & SHARE</h3>
+          <p>Scanne den QR-Code mit deiner Handykamera.</p>
+          <button id="copyLinkBtn" class="secondary-button">PARTY-LINK KOPIEREN</button>
+          <div id="copyStatus" class="status"></div>
+        </div>
+      </div>
+    </section>
 
-  data.forEach(item => {
-    const { data: urlData } = sb.storage.from("photos").getPublicUrl(item.name);
-    const card = document.createElement("button");
-    card.className = "photo-card";
-    card.type = "button";
-    card.innerHTML = `<img loading="lazy" src="${urlData.publicUrl}" alt="Partyfoto">`;
-    card.onclick = () => openLightbox(urlData.publicUrl);
-    gallery.appendChild(card);
-  });
-}
+    <section class="section gallery-section">
+      <div class="section-label">02 / THE GALLERY</div>
 
-function openLightbox(url) {
-  const box = document.createElement("div");
-  box.className = "lightbox";
-  box.innerHTML = `<div class="lightbox-bg"></div><img src="${url}" alt="Partyfoto"><button class="close-lightbox">×</button>`;
-  document.body.appendChild(box);
-  box.querySelector(".close-lightbox").onclick = () => box.remove();
-  box.querySelector(".lightbox-bg").onclick = () => box.remove();
-}
+      <div class="gallery-heading">
+        <h2>Unsere<br><span>Moments.</span></h2>
+        <span class="live-indicator"><i></i> GALERIE</span>
+      </div>
 
-function createQR() {
-  if (typeof QRCode === "undefined") return;
-  const url = window.location.href;
-  QRCode.toCanvas(qrCanvas, url, {
-    width: 220,
-    margin: 2,
-    color: { dark: document.body.dataset.theme === "halloween" ? "#ff7a00" : "#111827", light: "#ffffff" }
-  });
-}
+      <div id="gallery" class="gallery"></div>
 
-uploadBtn.addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", () => uploadPhotos([...fileInput.files]));
+      <div id="emptyState" class="empty-state">
+        <div class="empty-icon">✦</div>
+        <h3>Noch keine Fotos</h3>
+        <p>Sei der Erste und teile einen Moment mit uns.</p>
+      </div>
 
-createQR();
-loadGallery();
+      <button id="refreshBtn" class="secondary-button refresh-button">
+        GALERIE AKTUALISIEREN ↻
+      </button>
+    </section>
+  </main>
+
+  <footer>
+    <a class="logo" href="#">HOUSE<span>23</span></a>
+    <p>23.10.2026 · GOOD VIBES, GREAT MEMORIES.</p>
+  </footer>
+
+  <div id="lightbox" class="lightbox" hidden>
+    <button id="closeLightbox" class="close-lightbox" aria-label="Bild schließen">×</button>
+    <img id="lightboxImage" src="" alt="Partyfoto in Vollbildansicht">
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
